@@ -1,0 +1,5 @@
+EXPORT_FORMAT = "onnx"
+
+SIMPLIFY = True
+
+DYNAMIC = False
