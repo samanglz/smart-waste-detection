@@ -19,3 +19,17 @@ class YOLOModel:
     @property
     def weight_path(self) -> Path:
         return self._weight_path
+    
+    
+    
+    def train(self, **kwargs):
+        return self._model.train(**kwargs)
+
+    def predict(self, **kwargs):
+        return self._model.predict(**kwargs)
+
+    def val(self, **kwargs):
+        return self._model.val(**kwargs)
+
+    def export(self, **kwargs):
+        return self._model.export(**kwargs)

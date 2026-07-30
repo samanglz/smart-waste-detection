@@ -2,6 +2,13 @@ from abc import ABC, abstractmethod
 
 
 class BaseTrainer(ABC):
+    
+    def __init__(self, config):
+    
+        self.config = config
+        self.model = None
+        self.logger = None
+        self.metrics = None
 
     @abstractmethod
     def build_model(self):

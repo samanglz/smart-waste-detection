@@ -1,18 +1,15 @@
-from ultralytics import YOLO
-
 from src.trainers.base_trainer import BaseTrainer
-
+from src.models.yolo.model import YOLOModel
 
 class YOLOTrainer(BaseTrainer):
 
     def __init__(self, config):
 
-        self.config = config
-        self.model = None
+        super().__init__(config)
 
     def build_model(self):
 
-        self.model = YOLO(self.config.MODEL_PATH)
+        self.model = YOLOModel(self.config.MODEL_PATH)
 
     def train(self):
 
