@@ -10,6 +10,7 @@ class BaseTrainer(ABC):
         self.model = None
         self.logger = None
         self.metrics = None
+        self.optimizer = None
 
     @abstractmethod
     def build_model(self):
@@ -25,8 +26,4 @@ class BaseTrainer(ABC):
 
     @abstractmethod
     def save_checkpoint(self):
-        pass
-
-    @abstractmethod
-    def load_checkpoint(self):
         pass

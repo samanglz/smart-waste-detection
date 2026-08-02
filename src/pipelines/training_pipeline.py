@@ -1,14 +1,14 @@
 from src.logging.logger import get_logger
-from src.trainers.yolo_trainer import YOLOTrainer
+
 
 
 class TrainingPipeline:
 
-    def __init__(self, config):
+    def __init__(self, config, trainer):
 
         self.config = config
         self.logger = get_logger(self.__class__.__name__)
-        self.trainer = YOLOTrainer(config)
+        self.trainer = trainer
 
     def build(self):
 

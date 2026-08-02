@@ -1,9 +1,11 @@
 from pathlib import Path
-
 from ultralytics import YOLO
 
+from src.models.capabilities.predictable import Predictable
+from src.models.capabilities.trainable import Trainable
 
-class YOLOModel:
+
+class YOLOModel(Trainable, Predictable):
     """
     Wrapper around Ultralytics YOLO model.
     """
