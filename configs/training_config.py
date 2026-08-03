@@ -1,3 +1,6 @@
+from src.augmentations import YOLOAugmentationConfig
+
+
 EPOCHS = 50
 
 BATCH_SIZE = 4
@@ -13,3 +16,6 @@ PATIENCE = 50
 PROJECT_NAME = "smart_waste"
 
 RUN_NAME = "yolo_baseline"
+
+
+AUGMENTATION = YOLOAugmentationConfig()
