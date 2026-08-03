@@ -82,7 +82,7 @@ class YOLODataset(BaseDataset):
         Raises:
             FileNotFoundError: If required files or directories are missing.
         """
-        # ۱. چک کردن وجود فایل data.yaml
+        #1. checking existence of data.ymal file.
         if not self.yaml_path.exists():
             raise FileNotFoundError(
                 f"Dataset yaml not found: {self.yaml_path}"
@@ -174,8 +174,8 @@ class YOLODataset(BaseDataset):
                 - image_path: str, absolute path to the image
                 - boxes: List[Dict], each with 'class_id' and 'bbox'
         """
-        if split not in self._paths:
-            raise ValueError(f"Invalid split: {split}")
+            if split not in self._paths:
+                raise ValueError(f"Invalid split: {split}")
 
         img_dir = self._paths[split]["images"]
         label_dir = self._paths[split]["labels"]

@@ -1,11 +1,14 @@
 from src.trainers.base_trainer import BaseTrainer
 from src.models.yolo.yolo_model import YOLOModel
 
+
+
 class YOLOTrainer(BaseTrainer):
 
     def __init__(self, config, dataset):
 
         super().__init__(config)
+        self.config = config 
         self.dataset = dataset
 
     def build_model(self):
@@ -14,7 +17,10 @@ class YOLOTrainer(BaseTrainer):
 
     def train(self):
         
+        aug_params = self.config.AUGMENTATION.to_dict(),
+        
         self.model.train(
+            
 
             data=self.dataset.get_dataset_config(),
 
@@ -23,15 +29,16 @@ class YOLOTrainer(BaseTrainer):
             imgsz=self.config.IMAGE_SIZE,
 
             batch=self.config.BATCH_SIZE,
+            **aug_params,
         )
     def validate(self):
 
         self.model.val()
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, path: Path):
+        """Save model checkpoint."""
+        self.model.model.save(str(path))
 
-        pass
-
-    def load_checkpoint(self):
-
-        pass
+    def load_checkpoint(self, path: Path):
+        """Load model checkpoint."""
+        self.model = YOLOModel(path)

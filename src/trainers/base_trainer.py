@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-
+from src.logging.logger import get_logger
 
 
 class BaseTrainer(ABC):
@@ -8,7 +8,7 @@ class BaseTrainer(ABC):
     
         self.config = config
         self.model = None
-        self.logger = None
+        self.logger = get_logger(self.__class__.__name__)
         self.metrics = None
         self.optimizer = None
 
@@ -26,4 +26,8 @@ class BaseTrainer(ABC):
 
     @abstractmethod
     def save_checkpoint(self):
+        pass
+    
+    @abstractmethod
+    def load_checkpoint(self):
         pass
