@@ -11,6 +11,8 @@ class YOLOModel(Trainable, Predictable):
     """
 
     def __init__(self, weight_path: Path):
+        print(f"🔵 weight_path type: {type(weight_path)}")
+        print(f"🔵 weight_path: {weight_path}") 
         self._weight_path = weight_path
         self._model = YOLO(str(weight_path))
 

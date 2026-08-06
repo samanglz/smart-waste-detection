@@ -26,7 +26,7 @@ class YOLODataset(BaseDataset):
     def __init__(self, dataset_root: Path):
 
         super().__init__(dataset_root)
-        self.yaml_path = self.dataset_root / "data.yaml"
+        self._yaml_path = self.dataset_root / "data.yaml"
         self.classes = []
         self.num_classes = 0
 
@@ -61,7 +61,10 @@ class YOLODataset(BaseDataset):
         self.load()
         self.validate()
 
-
+    @property
+    def yaml_path(self) -> Path:
+        """Return the path to data.yaml file (read-only)."""
+        return self._yaml_path
 
 
 
@@ -134,7 +137,6 @@ class YOLODataset(BaseDataset):
         """
         Load YOLO dataset metadata.
         """
-
         with open(self.yaml_path, "r", encoding='utf-8') as file:
             data = yaml.safe_load(file)
 
@@ -146,24 +148,14 @@ class YOLODataset(BaseDataset):
             self.classes = [self.classes[i] for i in sorted(self.classes.keys())]
         
         if len(self.classes) != self.num_classes:
-            raise ValueError(
-                "Class count mismatch"
-            )
+            raise ValueError("Class count mismatch")
         
-        logger.info(
-            "Loaded YOLO dataset with %d classes",
-            self.num_classes
-        )
+        logger.info("Loaded YOLO dataset with %d classes", self.num_classes)
+        logger.info("Classes: %s", self.classes)
 
-        logger.info(
-            "Classes: %s",
-            self.classes
-        )
-        
-        
-        
-        def _load_split(self, split: str) -> List[Dict[str, Any]]:
-            """
+
+    def _load_split(self, split: str) -> List[Dict[str, Any]]:  # ← اینجا دیگر داخل load نیست
+        """
         Load all samples from a split (train/val/test).
 
         Args:
@@ -174,8 +166,8 @@ class YOLODataset(BaseDataset):
                 - image_path: str, absolute path to the image
                 - boxes: List[Dict], each with 'class_id' and 'bbox'
         """
-            if split not in self._paths:
-                raise ValueError(f"Invalid split: {split}")
+        if split not in self._paths:
+            raise ValueError(f"Invalid split: {split}")
 
         img_dir = self._paths[split]["images"]
         label_dir = self._paths[split]["labels"]
@@ -216,9 +208,7 @@ class YOLODataset(BaseDataset):
 
         logger.debug("Loaded %d samples from %s split", len(samples), split)
         return samples
-    
-    
-    
+        
     
     def get_train_data(self) -> List[Dict[str, Any]]:
         """Load and return all training samples."""
@@ -240,16 +230,6 @@ class YOLODataset(BaseDataset):
         """Return the total number of classes."""
         return self.num_classes
 
-    def get_dataset_config(self) -> Dict[str, Any]:
-        """YOLO config dict for Ultralytics model.train()"""
-        return {
-            'path': str(self.dataset_root),
-            'train': 'train/images',
-            'val': 'val/images',
-            'test': 'test/images',
-            'nc': self.num_classes,
-            'names': self.classes
-        }
 
     def get_metadata(self) -> Dict[str, Any]:
         """Dataset statistics."""

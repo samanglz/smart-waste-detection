@@ -1,6 +1,6 @@
 from src.trainers.base_trainer import BaseTrainer
 from src.models.yolo.yolo_model import YOLOModel
-
+from pathlib import Path
 
 
 class YOLOTrainer(BaseTrainer):
@@ -16,13 +16,16 @@ class YOLOTrainer(BaseTrainer):
         self.model = YOLOModel(self.config.MODEL_PATH)
 
     def train(self):
-        
-        aug_params = self.config.AUGMENTATION.to_dict(),
+        print(f"🔵 AUGMENTATION type: {type(self.config.AUGMENTATION)}")
+        print(f"🔵 AUGMENTATION: {self.config.AUGMENTATION}")
+        aug_params = self.config.AUGMENTATION.to_dict()
+        print(f"🔵 aug_params type: {type(aug_params)}")
+        print(f"🔵 aug_params: {aug_params}")
         
         self.model.train(
             
 
-            data=self.dataset.get_dataset_config(),
+            data=str(self.dataset.yaml_path),
 
             epochs=self.config.EPOCHS,
 

@@ -62,18 +62,6 @@ class BaseDataset(ABC):
         """Return the total number of classes."""
         pass
 
-    @abstractmethod
-    def get_dataset_config(self) -> Dict[str, Any]:
-        """
-        Return framework-specific dataset configuration.
-
-        For YOLO, this returns a dictionary with 'path', 'train', 'val',
-        'test', 'nc', and 'names' keys compatible with Ultralytics YOLO.
-
-        Returns:
-            Dictionary containing dataset configuration parameters.
-        """
-        pass
 
     # ===== Auxiliary Methods =====
 

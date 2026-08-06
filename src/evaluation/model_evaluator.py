@@ -52,7 +52,7 @@ class ModelEvaluator:
         logger.info("Evaluating on %s split...", split)
 
         results = self.model.val(
-            data=self.dataset.get_dataset_config(),
+            data=str(self.dataset.yaml_path),
             split=split,
         )
 
