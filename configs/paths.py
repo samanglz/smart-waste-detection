@@ -14,4 +14,4 @@ TEST_DIR = FINAL_DATASET_DIR / "test"
 
 RUNS_DIR = PROJECT_ROOT / "runs"
 
-OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs" / " yolo"
