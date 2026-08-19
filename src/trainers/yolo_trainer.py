@@ -1,6 +1,7 @@
 from src.trainers.base_trainer import BaseTrainer
 from src.models.yolo.yolo_model import YOLOModel
 from pathlib import Path
+import torch
 
 
 class YOLOTrainer(BaseTrainer):
@@ -22,6 +23,11 @@ class YOLOTrainer(BaseTrainer):
         print(f"🔵 aug_params type: {type(aug_params)}")
         print(f"🔵 aug_params: {aug_params}")
         
+        project_name = getattr(self.config, 'PROJECT_NAME', 'runs/detect')
+        run_name = getattr(self.config, 'RUN_NAME', 'train')
+        optimizer = getattr(self.config, 'OPTIMIZER', 'auto')
+        
+            
         self.model.train(
             
 
@@ -32,8 +38,19 @@ class YOLOTrainer(BaseTrainer):
             imgsz=self.config.IMAGE_SIZE,
 
             batch=self.config.BATCH_SIZE,
+            
+            cos_lr=True, 
+            
+            save_period  = 10,
+            
+            optimizer = optimizer,
+            
+            project=project_name,  #changing path for saving model
+            name=run_name,   
+            
             **aug_params,
         )
+        
     def validate(self):
 
         self.model.val()

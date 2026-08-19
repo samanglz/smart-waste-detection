@@ -7,8 +7,9 @@ during training and inference.
 
 from dataclasses import dataclass
 from typing import Dict, Any
+from src.logging.logger import get_logger
 
-
+logger = get_logger(__name__)
 @dataclass
 class YOLOAugmentationConfig:
     """
@@ -112,4 +113,34 @@ class YOLOAugmentationConfig:
         self.mosaic = 1.0
         self.mixup = 0.2
         self.copy_paste = 0.3
+        return self
+    
+    
+    def enable_class_focused_augmentations(self, target_class: str = "glass") -> "YOLOAugmentationConfig":
+        """
+        Enable augmentations specifically for improving detection of a target class.
+
+        Args:
+            target_class: Name of the class to focus on
+
+        Returns:
+            YOLOAugmentationConfig with class-focused augmentations
+        """
+        if target_class.lower() == "glass":
+            self.hsv_h = 0.02      # Increased for glass (transparency)
+            self.hsv_s = 0.8       # Increased saturation variation
+            self.hsv_v = 0.5       # Increased brightness variation
+            self.degrees = 5.0     # Small rotations
+            self.translate = 0.15
+            self.scale = 0.5
+            self.shear = 3.0
+            self.flipud = 0.0
+            self.fliplr = 0.5
+            self.mosaic = 1.0
+            self.mixup = 0.1
+            self.copy_paste = 0.1
+        else:
+            logger.warning("No specific augmentations defined for class: %s", target_class)
+            self.enable_light_augmentations()
+
         return self

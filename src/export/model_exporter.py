@@ -79,7 +79,7 @@ class ModelExporter:
 
         self.model.export(
             format="onnx",
-            path=str(output_path),   # ✅ crucial: specify output path
+            filename=str(output_path),   # ✅ crucial: specify output path
             imgsz=imgsz,
             simplify=simplify,
             dynamic=dynamic,

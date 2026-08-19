@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+
+# Training outputs
+runs/
+outputs/
+
+# Dataset caches
+*.cache
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+
+# Temporary Office files
+~$*
+
+# IDE
+.vscode/
+.idea/

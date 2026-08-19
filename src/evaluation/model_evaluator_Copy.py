@@ -7,20 +7,27 @@ on dataset splits with metrics extraction and report generation.
 
 import json
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional,Tuple, List
 from collections import defaultdict
 from PIL import Image
+
+
 
 from src.models.yolo.yolo_model import YOLOModel
 from src.data.yolo_dataset import YOLODataset
 from src.logging.logger import get_logger
+from src.evaluation.error_analyzer import ErrorAnalyzer
+from src.evaluation.prioritization.error_prioritizer import ( 
+    ErrorPrioritizer,
+                                                             
+    )
 
 
 
 logger = get_logger(__name__)
 
 
-class ModelEvaluator:
+class ModelEvaluator_copy:
     """
     Evaluates trained YOLO models on dataset splits.
 
@@ -42,6 +49,9 @@ class ModelEvaluator:
         self.dataset = dataset
         self._cached_results = {}
         logger.info("ModelEvaluator initialized")
+        self.error_analyzer = ErrorAnalyzer(
+            self.dataset.get_class_names()
+)
 
 
     def _get_val_results(self, split: str = "test"):
@@ -104,6 +114,51 @@ class ModelEvaluator:
         logger.info("Computing per-class metrics on %s split...", split)
         results = self._get_val_results(split)
         return self._extract_per_class_metrics(results)
+
+
+
+    def prioritize_errors(
+        self,
+        split: str = "test",
+        top_k: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Prioritize detected errors on a dataset split.
+
+        The method reuses the existing error-analysis pipeline
+        and delegates prioritization to ErrorPrioritizer.
+        """
+
+        error_report = self.analyze_errors(
+            split=split,
+        )
+
+        prioritizer = ErrorPrioritizer()
+
+        return {
+            "classes": prioritizer.rank_classes(
+                metrics=error_report["per_class_metrics"],
+                criterion="ap",
+                top_k=top_k,
+            ),
+            "confusions": prioritizer.rank_confusions(
+                confusion=error_report["error_analysis"]["confusion"],
+                criterion="count",
+                top_k=top_k,
+            ),
+            "false_positives": prioritizer.rank_false_positives(
+                false_positives=error_report["error_analysis"]["false_positives"],
+                criterion="count",
+                top_k=top_k,
+            ),
+            "false_negatives": prioritizer.rank_false_negatives(
+                false_negatives=error_report["error_analysis"]["false_negatives"],
+                criterion="count",
+                top_k=top_k,
+            ),
+        }
+
+
 
     def generate_report(self, output_path: Path, split: str = "test") -> Path:
         """
@@ -227,6 +282,9 @@ class ModelEvaluator:
     
     
         # ============================================================
+
+
+
     # Error Analysis Methods
     # ============================================================
     def analyze_errors(
@@ -234,6 +292,25 @@ class ModelEvaluator:
         split: str = "test",
         output_path: Optional[Path] = None,
     ) -> Dict[str, Any]:
+        """
+        Analyze model errors on a dataset split.
+
+        This method orchestrates the error-analysis pipeline:
+            1. Load standard evaluation metrics.
+            2. Load predictions and ground truths.
+            3. Match predictions with ground truths.
+            4. Analyze confusion, false positives, and false negatives.
+            5. Build class performance summary.
+            6. Generate recommendations.
+            7. Build and optionally save the final report.
+
+        Args:
+            split: Dataset split to analyze.
+            output_path: Optional path for saving the error-analysis report.
+
+        Returns:
+            Complete error-analysis report.
+        """
 
         logger.info("=" * 60)
         logger.info("Error Analysis on %s split", split)
@@ -244,81 +321,24 @@ class ModelEvaluator:
         # ---------------------------------------------------------
 
         results = self._get_val_results(split)
-
         per_class = self._extract_per_class_metrics(results)
 
-        sorted_classes = sorted(
-            per_class.items(),
-            key=lambda x: x[1]["ap"],
-        )
-
-        worst_class = (
-            sorted_classes[0][0]
-            if sorted_classes
-            else None
-        )
-
         # ---------------------------------------------------------
-        # 2. Get predictions and ground truths
+        # 2. Collect error-analysis data
         # ---------------------------------------------------------
 
-        predictions_by_image = self._get_predictions_by_image(split)
-
-        ground_truths_by_image = self._get_ground_truths_by_image(split)
+        analysis_data = self._collect_error_analysis_data(split)
 
         # ---------------------------------------------------------
-        # 3. Aggregate detection errors
+        # 3. Build class performance summary
         # ---------------------------------------------------------
 
-        detection_errors = self._aggregate_detection_errors(
-            predictions_by_image=predictions_by_image,
-            ground_truths_by_image=ground_truths_by_image,
-            iou_threshold=0.5,
+        class_performance_summary = (
+            self._build_class_performance_summary(per_class)
         )
 
         # ---------------------------------------------------------
-        # 4. Analyze individual error types
-        # ---------------------------------------------------------
-
-        confusion = self._analyze_confusion(
-            detection_errors["matches"]
-        )
-
-        false_positives = self._analyze_false_positives(
-            detection_errors["unmatched_predictions"]
-        )
-
-        false_negatives = self._analyze_false_negatives(
-            detection_errors["unmatched_ground_truths"]
-        )
-
-        # ---------------------------------------------------------
-        # 5. Performance summary
-        # ---------------------------------------------------------
-
-        class_performance_summary = {}
-
-        for name, metrics in per_class.items():
-
-            ap = metrics["ap"]
-
-            performance_level = (
-                "good"
-                if ap > 0.9
-                else "medium"
-                if ap > 0.8
-                else "poor"
-            )
-
-            class_performance_summary[name] = {
-                "ap": metrics["ap"],
-                "precision": metrics["precision"],
-                "recall": metrics["recall"],
-                "performance_level": performance_level,
-            }
-
-        # ---------------------------------------------------------
-        # 6. Recommendations
+        # 4. Generate recommendations
         # ---------------------------------------------------------
 
         recommendations = self._generate_recommendations(
@@ -326,211 +346,36 @@ class ModelEvaluator:
         )
 
         # ---------------------------------------------------------
-        # 7. Final report
+        # 5. Build final report
         # ---------------------------------------------------------
 
         error_report = {
             "split": split,
-
             "per_class_metrics": per_class,
-
-            "worst_class": worst_class,
-
-            "class_performance_summary":
-                class_performance_summary,
-
+            "class_performance_summary": class_performance_summary,
             "error_analysis": {
-                "confusion": confusion,
-                "false_positives": false_positives,
-                "false_negatives": false_negatives,
+                "confusion": analysis_data["confusion"],
+                "false_positives": analysis_data["false_positives"],
+                "false_negatives": analysis_data["false_negatives"],
             },
-
             "recommendations": recommendations,
         }
 
         # ---------------------------------------------------------
-        # 8. Save
+        # 6. Save report
         # ---------------------------------------------------------
 
         if output_path:
-
-            output_path.parent.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            with open(
-                output_path,
-                "w",
-                encoding="utf-8",
-            ) as f:
-
-                json.dump(
-                    error_report,
-                    f,
-                    indent=2,
-                    ensure_ascii=False,
-                )
-
-            logger.info(
-                "Error analysis saved to: %s",
+            self._save_error_report(
+                error_report,
                 output_path,
             )
 
         return error_report
-    
-    
-    
-    def _analyze_confusion(
-        self,
-        matches,
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Analyze class confusion from matched predictions.
-
-        Returns:
-            Dictionary containing confusion statistics between classes.
-        """
-
-        class_names = self.dataset.get_class_names()
-
-        confusion = defaultdict(
-            lambda: defaultdict(
-                lambda: {
-                    "count": 0,
-                    "mean_iou": 0.0,
-                    "mean_confidence": 0.0,
-                    "images": [],
-                }
-            )
-        )
-
-        for match in matches:
-
-            pred_class = match["pred_class"]
-            gt_class = match["gt_class"]
-
-            # Correct classification → not a confusion
-            if pred_class == gt_class:
-                continue
-
-            gt_name = (
-                class_names[gt_class]
-                if gt_class < len(class_names)
-                else f"class_{gt_class}"
-            )
-
-            pred_name = (
-                class_names[pred_class]
-                if pred_class < len(class_names)
-                else f"class_{pred_class}"
-            )
-
-            confusion_data = confusion[gt_name][pred_name]
-
-            confusion_data["count"] += 1
-
-            confusion_data["mean_iou"] += match["iou"]
-
-            confidence = match["prediction"].get("confidence", 0.0)
-
-            confusion_data["mean_confidence"] += confidence
-
-            image_path = match.get("image_path")
-
-            if image_path is not None:
-                confusion_data["images"].append(image_path)
-
-        # Convert accumulated sums to means
-        for gt_name, predictions in confusion.items():
-
-            for pred_name, data in predictions.items():
-
-                count = data["count"]
-
-                if count > 0:
-                    data["mean_iou"] /= count
-                    data["mean_confidence"] /= count
-
-        return {
-            gt_name: dict(predictions)
-            for gt_name, predictions in confusion.items()
-        }
-            
         
-        
-    def _match_predictions_to_ground_truth(
-        self,
-        predictions,
-        ground_truths,
-        image_path: str,
-        iou_threshold: float = 0.5,
-    ):
-        """
-        Match predictions to ground-truth boxes using IoU.
-        """
+    
+    
 
-        matches = []
-        unmatched_predictions = []
-        unmatched_ground_truths = []
-
-        matched_gt = set()
-
-        for pred_idx, pred in enumerate(predictions):
-
-            best_iou = 0.0
-            best_gt_idx = None
-
-            for gt_idx, gt in enumerate(ground_truths):
-
-                if gt_idx in matched_gt:
-                    continue
-
-                iou = self._calculate_iou(
-                    pred["bbox"],
-                    gt["bbox"]
-                )
-
-                if iou > best_iou:
-                    best_iou = iou
-                    best_gt_idx = gt_idx
-
-            if best_gt_idx is not None and best_iou >= iou_threshold:
-
-                matched_gt.add(best_gt_idx)
-
-                matches.append({
-                    "image_path" : image_path,
-                    "prediction_index": pred_idx,
-                    "ground_truth_index": best_gt_idx,
-                    "pred_class": pred["class_id"],
-                    "gt_class": ground_truths[best_gt_idx]["class_id"],
-                    "iou": best_iou,
-                    "prediction": pred,
-                    "ground_truth": ground_truths[best_gt_idx],
-                })
-
-            else:
-                unmatched_predictions.append({
-                    "image_path" : image_path,
-                    "prediction_index": pred_idx,
-                    "prediction": pred,
-                })
-
-        for gt_idx, gt in enumerate(ground_truths):
-
-            if gt_idx not in matched_gt:
-                unmatched_ground_truths.append({
-                    "image_path" : image_path,
-                    "ground_truth_index": gt_idx,
-                    "ground_truth": gt,
-                })
-
-        return {
-            "matches": matches,
-            "unmatched_predictions": unmatched_predictions,
-            "unmatched_ground_truths": unmatched_ground_truths,
-        }
 
     def _calculate_iou(self, box1, box2) -> float:
         """
@@ -574,72 +419,101 @@ class ModelEvaluator:
 
 
 
-    def _aggregate_detection_errors(
+
+
+
+    def _analyze_confusion(
         self,
-        predictions_by_image,
-        ground_truths_by_image,
-        iou_threshold: float = 0.5,
-    ) -> Dict[str, Any]:
+        matches,
+    ) -> Dict[str, Dict[str, Any]]:
         """
-        Aggregate detection errors across all images in a dataset split.
-
-        Args:
-            predictions_by_image:
-                Dictionary mapping image paths to model predictions.
-
-            ground_truths_by_image:
-                Dictionary mapping image paths to ground-truth annotations.
-
-            iou_threshold:
-                IoU threshold used for prediction/ground-truth matching.
-
-        Returns:
-            Aggregated detection error statistics.
+        Analyze class confusion from matched predictions.
         """
 
-        all_matches = []
-        all_unmatched_predictions = []
-        all_unmatched_ground_truths = []
+        class_names = self.dataset.get_class_names()
 
-        image_paths = set(predictions_by_image) | set(ground_truths_by_image)
+        confusion = defaultdict(
+            lambda: defaultdict(
+                lambda: {
+                    "count": 0,
+                    "mean_iou": 0.0,
+                    "mean_confidence": 0.0,
+                    "images": [],
+                    "cases": [],
+                }
+            )
+        )
 
-        for image_path in image_paths:
+        for match in matches:
 
-            predictions = predictions_by_image.get(
-                image_path,
-                []
+            pred_class = match["pred_class"]
+            gt_class = match["gt_class"]
+
+            # Correct classification → not a confusion
+            if pred_class == gt_class:
+                continue
+
+            gt_name = (
+                class_names[gt_class]
+                if gt_class < len(class_names)
+                else f"class_{gt_class}"
             )
 
-            ground_truths = ground_truths_by_image.get(
-                image_path,
-                []
+            pred_name = (
+                class_names[pred_class]
+                if pred_class < len(class_names)
+                else f"class_{pred_class}"
             )
 
-            result = self._match_predictions_to_ground_truth(
-                predictions=predictions,
-                ground_truths=ground_truths,
-                image_path= image_path,
-                iou_threshold=iou_threshold,
+            confusion_data = confusion[gt_name][pred_name]
+
+            confusion_data["count"] += 1
+
+            confusion_data["mean_iou"] += match["iou"]
+
+            confidence = match["prediction"].get(
+                "confidence",
+                0.0,
             )
 
-            all_matches.extend(result["matches"])
+            confusion_data["mean_confidence"] += confidence
 
-            all_unmatched_predictions.extend(
-                result["unmatched_predictions"]
-            )
+            image_path = match.get("image_path")
 
-            all_unmatched_ground_truths.extend(
-                result["unmatched_ground_truths"]
-            )
+            if image_path is not None:
+
+                confusion_data["images"].append(
+                    image_path
+                )
+
+                confusion_data["cases"].append({
+                    "image_path": image_path,
+                    "gt_class": gt_name,
+                    "pred_class": pred_name,
+                    "gt_bbox": match["ground_truth"]["bbox"],
+                    "pred_bbox": match["prediction"]["bbox"],
+                    "iou": match["iou"],
+                    "confidence": confidence,
+                })
+
+        # Convert accumulated sums to means
+        for gt_name, predictions in confusion.items():
+
+            for pred_name, data in predictions.items():
+
+                count = data["count"]
+
+                if count > 0:
+                    data["mean_iou"] /= count
+                    data["mean_confidence"] /= count
 
         return {
-            "matches": all_matches,
-            "unmatched_predictions": all_unmatched_predictions,
-            "unmatched_ground_truths": all_unmatched_ground_truths,
+            gt_name: dict(predictions)
+            for gt_name, predictions in confusion.items()
         }
-
-
-
+                
+        
+        
 
 
 
@@ -752,15 +626,316 @@ class ModelEvaluator:
 
 
 
+
+
+
+    def _match_predictions_to_ground_truth(
+        self,
+        predictions: List[Dict[str, Any]],
+        ground_truths: List[Dict[str, Any]],
+        image_path: str,
+        iou_threshold: float = 0.5,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Match predictions with ground-truth objects using IoU.
+
+        Matching is class-agnostic intentionally.
+
+        This allows us to detect classification confusions such as:
+
+            GT: glass
+            Pred: plastic
+            IoU: 0.91
+
+        which is a classification error rather than a localization error.
+
+        Matching strategy:
+            1. Sort predictions by confidence descending.
+            2. For each prediction, find the unmatched GT
+            with the highest IoU.
+            3. If IoU >= threshold -> match.
+            4. Otherwise -> unmatched prediction (FP).
+            5. Remaining GTs -> unmatched ground truths (FN).
+
+        Args:
+            predictions:
+                Model predictions for one image.
+
+            ground_truths:
+                Ground-truth objects for one image.
+
+            image_path:
+                Path of the image.
+
+            iou_threshold:
+                Minimum IoU required for matching.
+
+        Returns:
+            Dictionary containing:
+                matches
+                unmatched_predictions
+                unmatched_ground_truths
+        """
+
+        matches: List[Dict[str, Any]] = []
+        unmatched_predictions: List[Dict[str, Any]] = []
+        unmatched_ground_truths: List[Dict[str, Any]] = []
+
+        # ---------------------------------------------------------
+        # 1. Normalize image path
+        # ---------------------------------------------------------
+
+        image_path = str(Path(image_path))
+
+        # ---------------------------------------------------------
+        # 2. Sort predictions by confidence
+        # ---------------------------------------------------------
+
+        sorted_predictions = sorted(
+            enumerate(predictions),
+            key=lambda item: item[1].get("confidence", 0.0),
+            reverse=True,
+        )
+
+        matched_gt_indices = set()
+
+        # ---------------------------------------------------------
+        # 3. Match predictions to GT
+        # ---------------------------------------------------------
+
+        for pred_idx, prediction in sorted_predictions:
+
+            best_iou = 0.0
+            best_gt_idx = None
+
+            for gt_idx, ground_truth in enumerate(ground_truths):
+
+                # GT already matched
+                if gt_idx in matched_gt_indices:
+                    continue
+
+                iou = self._calculate_iou(
+                    prediction["bbox"],
+                    ground_truth["bbox"],
+                )
+
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt_idx = gt_idx
+
+            # -----------------------------------------------------
+            # Successful spatial match
+            # -----------------------------------------------------
+
+            if (
+                best_gt_idx is not None
+                and best_iou >= iou_threshold
+            ):
+
+                matched_gt_indices.add(best_gt_idx)
+
+                ground_truth = ground_truths[best_gt_idx]
+
+                matches.append(
+                    {
+                        "image_path": image_path,
+
+                        "prediction_index": pred_idx,
+                        "ground_truth_index": best_gt_idx,
+
+                        "pred_class": prediction["class_id"],
+                        "gt_class": ground_truth["class_id"],
+
+                        "iou": float(best_iou),
+
+                        "prediction": {
+                            "class_id": prediction["class_id"],
+                            "confidence": float(
+                                prediction.get("confidence", 0.0)
+                            ),
+                            "bbox": prediction["bbox"],
+                        },
+
+                        "ground_truth": {
+                            "class_id": ground_truth["class_id"],
+                            "bbox": ground_truth["bbox"],
+                        },
+                    }
+                )
+
+            # -----------------------------------------------------
+            # No suitable GT -> false positive
+            # -----------------------------------------------------
+
+            else:
+
+                unmatched_predictions.append(
+                    {
+                        "image_path": image_path,
+
+                        "prediction_index": pred_idx,
+
+                        "prediction": {
+                            "class_id": prediction["class_id"],
+                            "confidence": float(
+                                prediction.get("confidence", 0.0)
+                            ),
+                            "bbox": prediction["bbox"],
+                        },
+                    }
+                )
+
+        # ---------------------------------------------------------
+        # 4. Remaining GTs -> false negatives
+        # ---------------------------------------------------------
+
+        for gt_idx, ground_truth in enumerate(ground_truths):
+
+            if gt_idx in matched_gt_indices:
+                continue
+
+            unmatched_ground_truths.append(
+                {
+                    "image_path": image_path,
+
+                    "ground_truth_index": gt_idx,
+
+                    "ground_truth": {
+                        "class_id": ground_truth["class_id"],
+                        "bbox": ground_truth["bbox"],
+                    },
+                }
+            )
+
+        return {
+            "matches": matches,
+            "unmatched_predictions": unmatched_predictions,
+            "unmatched_ground_truths": unmatched_ground_truths,
+        }
+
+
+
+
+
+    def _aggregate_detection_errors(
+        self,
+        predictions_by_image: Dict[str, List[Dict[str, Any]]],
+        ground_truths_by_image: Dict[str, List[Dict[str, Any]]],
+        iou_threshold: float = 0.5,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Aggregate detection errors across all images.
+
+        The aggregation combines image-level matching results into
+        dataset-level error categories.
+
+        Returns:
+            {
+                "matches": [...],
+                "unmatched_predictions": [...],
+                "unmatched_ground_truths": [...]
+            }
+        """
+
+        all_matches: List[Dict[str, Any]] = []
+        all_unmatched_predictions: List[Dict[str, Any]] = []
+        all_unmatched_ground_truths: List[Dict[str, Any]] = []
+
+        # ---------------------------------------------------------
+        # Normalize image keys
+        # ---------------------------------------------------------
+
+        normalized_predictions = {
+            str(Path(image_path)): predictions
+            for image_path, predictions
+            in predictions_by_image.items()
+        }
+
+        normalized_ground_truths = {
+            str(Path(image_path)): ground_truths
+            for image_path, ground_truths
+            in ground_truths_by_image.items()
+        }
+
+        # ---------------------------------------------------------
+        # All images
+        # ---------------------------------------------------------
+
+        image_paths = (
+            set(normalized_predictions.keys())
+            | set(normalized_ground_truths.keys())
+        )
+
+        logger.info(
+            "Aggregating detection errors for %d images",
+            len(image_paths),
+        )
+
+        # ---------------------------------------------------------
+        # Process each image
+        # ---------------------------------------------------------
+
+        for image_path in image_paths:
+
+            predictions = normalized_predictions.get(
+                image_path,
+                [],
+            )
+
+            ground_truths = normalized_ground_truths.get(
+                image_path,
+                [],
+            )
+
+            result = self._match_predictions_to_ground_truth(
+                predictions=predictions,
+                ground_truths=ground_truths,
+                image_path=image_path,
+                iou_threshold=iou_threshold,
+            )
+
+            all_matches.extend(
+                result["matches"]
+            )
+
+            all_unmatched_predictions.extend(
+                result["unmatched_predictions"]
+            )
+
+            all_unmatched_ground_truths.extend(
+                result["unmatched_ground_truths"]
+            )
+
+        logger.info(
+            "Detection matching completed: "
+            "%d matches, %d unmatched predictions, "
+            "%d unmatched ground truths",
+            len(all_matches),
+            len(all_unmatched_predictions),
+            len(all_unmatched_ground_truths),
+        )
+
+        return {
+            "matches": all_matches,
+            "unmatched_predictions":
+                all_unmatched_predictions,
+            "unmatched_ground_truths":
+                all_unmatched_ground_truths,
+        }
+
+
+
+
+
     def _get_predictions_by_image(
         self,
         split: str,
         conf_threshold: float = 0.25,
-    ) -> Dict[str, list]:
+    ) -> Dict[str, List[Dict[str, Any]]]:
         """
-        Generate model predictions for all images in a dataset split.
+        Generate model predictions for every image in a dataset split.
 
-        Predictions are returned in a standardized format:
+        Predictions are normalized into a framework-independent format:
 
             {
                 "image_path": [
@@ -771,17 +946,136 @@ class ModelEvaluator:
                     }
                 ]
             }
-
-        Args:
-            split: One of 'train', 'val', 'test'.
-            conf_threshold: Minimum confidence threshold.
-
-        Returns:
-            Dictionary mapping image paths to predictions.
         """
 
         logger.info(
-            "Generating predictions for %s split",
+            "Generating predictions for %s split "
+            "(confidence >= %.2f)",
+            split,
+            conf_threshold,
+        )
+
+        split_getters = {
+            "train": self.dataset.get_train_data,
+            "val": self.dataset.get_val_data,
+            "test": self.dataset.get_test_data,
+        }
+
+        if split not in split_getters:
+
+            raise ValueError(
+                f"Invalid split: {split}. "
+                f"Expected one of: "
+                f"{list(split_getters.keys())}"
+            )
+
+        samples = split_getters[split]()
+
+        predictions_by_image: Dict[
+            str,
+            List[Dict[str, Any]]
+        ] = {}
+
+        for sample in samples:
+
+            image_path = Path(
+                sample["image_path"]
+            )
+
+            if not image_path.exists():
+
+                logger.warning(
+                    "Image not found: %s",
+                    image_path,
+                )
+
+                continue
+
+            try:
+
+                results = self.model.predict(
+                    source=str(image_path),
+                    conf=conf_threshold,
+                    verbose=False,
+                )
+
+            except Exception as exc:
+
+                logger.error(
+                    "Prediction failed for %s: %s",
+                    image_path,
+                    exc,
+                )
+
+                continue
+
+            predictions: List[
+                Dict[str, Any]
+            ] = []
+
+            for result in results:
+
+                if result.boxes is None:
+                    continue
+
+                for box in result.boxes:
+
+                    predictions.append(
+                        {
+                            "class_id": int(
+                                box.cls[0]
+                            ),
+
+                            "confidence": float(
+                                box.conf[0]
+                            ),
+
+                            "bbox": [
+                                float(value)
+                                for value in box.xyxy[0].tolist()
+                            ],
+                        }
+                    )
+
+            # Normalize path to string
+            normalized_path = str(
+                image_path
+            )
+
+            predictions_by_image[
+                normalized_path
+            ] = predictions
+
+        logger.info(
+            "Generated predictions for %d images",
+            len(predictions_by_image),
+        )
+
+        return predictions_by_image
+        
+      
+    
+
+    def _get_ground_truths_by_image(
+        self,
+        split: str,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Load ground-truth annotations for every image.
+
+        YOLO annotations are stored as:
+
+            [cx, cy, width, height]
+
+        normalized to [0, 1].
+
+        They are converted into pixel coordinates:
+
+            [x1, y1, x2, y2]
+        """
+
+        logger.info(
+            "Loading ground truths for %s split",
             split,
         )
 
@@ -792,58 +1086,139 @@ class ModelEvaluator:
         }
 
         if split not in split_getters:
+
             raise ValueError(
                 f"Invalid split: {split}. "
-                f"Expected one of {list(split_getters.keys())}"
+                f"Expected one of: "
+                f"{list(split_getters.keys())}"
             )
 
         samples = split_getters[split]()
 
-        predictions_by_image = {}
+        ground_truths_by_image: Dict[
+            str,
+            List[Dict[str, Any]]
+        ] = {}
 
         for sample in samples:
 
-            image_path = Path(sample["image_path"])
+            image_path = Path(
+                sample["image_path"]
+            )
 
             if not image_path.exists():
+
                 logger.warning(
                     "Image not found: %s",
                     image_path,
                 )
+
                 continue
 
-            results = self.model.predict(
-                source=str(image_path),
-                conf=conf_threshold,
-                verbose=False,
+            boxes = sample["boxes"]
+
+            try:
+
+                with Image.open(image_path) as image:
+
+                    image_width, image_height = (
+                        image.size
+                    )
+
+            except Exception as exc:
+
+                logger.error(
+                    "Failed to read image %s: %s",
+                    image_path,
+                    exc,
+                )
+
+                continue
+
+            ground_truths: List[
+                Dict[str, Any]
+            ] = []
+
+            for box in boxes:
+
+                class_id = int(
+                    box["class_id"]
+                )
+
+                cx, cy, width, height = (
+                    box["bbox"]
+                )
+
+                # -------------------------------------------------
+                # Convert normalized YOLO coordinates
+                # to pixel coordinates
+                # -------------------------------------------------
+
+                cx_pixel = cx * image_width
+                cy_pixel = cy * image_height
+
+                width_pixel = (
+                    width * image_width
+                )
+
+                height_pixel = (
+                    height * image_height
+                )
+
+                x1 = (
+                    cx_pixel
+                    - width_pixel / 2
+                )
+
+                y1 = (
+                    cy_pixel
+                    - height_pixel / 2
+                )
+
+                x2 = (
+                    cx_pixel
+                    + width_pixel / 2
+                )
+
+                y2 = (
+                    cy_pixel
+                    + height_pixel / 2
+                )
+
+                ground_truths.append(
+                    {
+                        "class_id": class_id,
+
+                        "bbox": [
+                            float(x1),
+                            float(y1),
+                            float(x2),
+                            float(y2),
+                        ],
+                    }
+                )
+
+            # -----------------------------------------------------
+            # IMPORTANT:
+            # Always use str(Path(...))
+            # -----------------------------------------------------
+
+            normalized_path = str(
+                image_path
             )
 
-            predictions = []
-
-            for result in results:
-
-                if result.boxes is None:
-                    continue
-
-                for box in result.boxes:
-
-                    predictions.append({
-                        "class_id": int(box.cls[0]),
-                        "confidence": float(box.conf[0]),
-                        "bbox": box.xyxy[0].tolist(),
-                    })
-
-            predictions_by_image[str(image_path)] = predictions
+            ground_truths_by_image[
+                normalized_path
+            ] = ground_truths
 
         logger.info(
-            "Generated predictions for %d images",
-            len(predictions_by_image),
+            "Loaded ground truths for %d images",
+            len(ground_truths_by_image),
         )
 
-        return predictions_by_image
-    
-    
-    
+        return ground_truths_by_image
+
+
     def _get_split_image_paths(
         self,
         split: str,
@@ -872,109 +1247,12 @@ class ModelEvaluator:
             Path(item["image_path"])
             for item in data
         ]
-        
-    
+  
+  
+  
 
-    def _get_ground_truths_by_image(
-        self,
-        split: str,
-    ) -> Dict[str, list]:
-        """
-        Get ground-truth annotations for all images in a dataset split.
-
-        The dataset already loads YOLO annotations in normalized format:
-            [cx, cy, width, height]
-
-        This method converts them to pixel coordinates:
-            [x1, y1, x2, y2]
-
-        Args:
-            split: One of 'train', 'val', 'test'.
-
-        Returns:
-            Dictionary mapping image paths to ground-truth boxes.
-        """
-
-        logger.info(
-            "Loading ground truths for %s split",
-            split,
-        )
-
-        split_getters = {
-            "train": self.dataset.get_train_data,
-            "val": self.dataset.get_val_data,
-            "test": self.dataset.get_test_data,
-        }
-
-        if split not in split_getters:
-            raise ValueError(
-                f"Invalid split: {split}. "
-                f"Expected one of {list(split_getters.keys())}"
-            )
-
-        samples = split_getters[split]()
-
-        ground_truths_by_image = {}
-
-        for sample in samples:
-
-            image_path = sample["image_path"]
-            boxes = sample["boxes"]
-
-            # Get image dimensions because YOLO coordinates
-            # are normalized to [0, 1].
-            with Image.open(image_path) as image:
-                image_width, image_height = image.size
-
-            ground_truths = []
-
-            for box in boxes:
-
-                class_id = box["class_id"]
-                cx, cy, width, height = box["bbox"]
-
-                # Convert normalized YOLO coordinates
-                # to pixel coordinates.
-                cx *= image_width
-                cy *= image_height
-                width *= image_width
-                height *= image_height
-
-                x1 = cx - width / 2
-                y1 = cy - height / 2
-                x2 = cx + width / 2
-                y2 = cy + height / 2
-
-                ground_truths.append({
-                    "class_id": class_id,
-                    "bbox": [
-                        x1,
-                        y1,
-                        x2,
-                        y2,
-                    ],
-                })
-
-            ground_truths_by_image[image_path] = ground_truths
-
-        logger.info(
-            "Loaded ground truths for %d images",
-            len(ground_truths_by_image),
-        )
-
-        return ground_truths_by_image
 
     def _generate_recommendations(self, per_class: Dict[str, Dict[str, float]]) -> Dict[str, str]:
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    
         """
         Generate recommendations for improving model performance.
 
@@ -1002,6 +1280,8 @@ class ModelEvaluator:
                 recommendations[class_name] = "Performance is good, no specific recommendation"
 
         return recommendations
+    
+    
     
     
     
@@ -1049,17 +1329,18 @@ class ModelEvaluator:
         # Error categories
         # ---------------------------------------------------------
 
-        confusion = self._analyze_confusion(
+        confusion = self.error_analyzer.analyze_confusion(
             detection_errors["matches"]
         )
 
-        false_positives = self._analyze_false_positives(
+        false_positives = self.error_analyzer.analyze_false_positives(
             detection_errors["unmatched_predictions"]
         )
 
-        false_negatives = self._analyze_false_negatives(
+        false_negatives = self.error_analyzer.analyze_false_negatives(
             detection_errors["unmatched_ground_truths"]
         )
+
 
         return {
             "per_class_metrics": per_class,
