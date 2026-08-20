@@ -25,3 +25,10 @@ outputs/
 # IDE
 .vscode/
 .idea/
+
+
+# Local / temporary project files
+main.py
+toknowtreeofproject.py
+fine_tune_glass.py
+things for fine tuning.docx
