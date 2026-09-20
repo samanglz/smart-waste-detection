@@ -22,6 +22,10 @@ from src.evaluation.prioritization.error_prioritizer import (
                                                              
     )
 
+from src.evaluation.failure_patterns.failure_pattern_analyzer import (
+    FailurePatternAnalyzer
+)
+
 
 
 logger = get_logger(__name__)
@@ -1435,3 +1439,6 @@ class ModelEvaluator_copy:
             "Error analysis saved to: %s",
             output_path,
         )
+        
+
+
