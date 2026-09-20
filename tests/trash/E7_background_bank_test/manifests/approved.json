@@ -1,0 +1,13 @@
+[
+  {
+    "image_path": "tests\\trash\\E7_background_bank_test\\images\\duplicate.jpg",
+    "width": 800,
+    "height": 600,
+    "aspect_ratio": 1.3333333333333333,
+    "quality_score": 0.9434585961772062,
+    "content_hash": "4befbe601c2c3505077343574425a7a218db37f3f887df9dd298fe4f7b1c127b",
+    "perceptual_hash": "1001011000110011011111100101001100101010110000110011100001101100",
+    "usable": true,
+    "reasons": []
+  }
+]

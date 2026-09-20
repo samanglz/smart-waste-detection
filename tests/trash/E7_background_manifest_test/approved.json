@@ -1,0 +1,17 @@
+[
+  {
+    "image_path": "images/library/bg_001.jpg",
+    "category": "library",
+    "usable": true
+  },
+  {
+    "image_path": "images/home/bg_002.jpg",
+    "category": "home",
+    "usable": true
+  },
+  {
+    "image_path": "images/library/bg_003.jpg",
+    "category": "library",
+    "usable": true
+  }
+]
