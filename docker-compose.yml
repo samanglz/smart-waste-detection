@@ -1,0 +1,10 @@
+services:
+  smart-waste-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smart-waste-api:e2
+    container_name: smart-waste-api
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
