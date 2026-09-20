@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+
+
 # Virtual environments
 .venv/
 venv/
@@ -10,6 +12,7 @@ venv/
 # Training outputs
 runs/
 outputs/
+validation_output.txt
 
 # Dataset caches
 *.cache
@@ -18,6 +21,7 @@ outputs/
 *.pt
 *.pth
 *.onnx
+*.engine
 
 # Temporary Office files
 ~$*
@@ -32,3 +36,15 @@ main.py
 toknowtreeofproject.py
 fine_tune_glass.py
 things for fine tuning.docx
+
+
+# Dataset
+data/
+
+
+
+
+# Temporary
+tests/trash/
+wheels/
+wheels-linux/
