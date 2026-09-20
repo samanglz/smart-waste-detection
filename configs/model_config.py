@@ -1,4 +1,4 @@
-MODEL_PATH = "yolo11n.pt"
+MODEL_PATH = "yolo11m.pt"
 
 NUM_CLASSES = 5
 

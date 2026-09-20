@@ -1,11 +1,13 @@
 """
 Model export implementation.
 
-This module provides a clean interface for exporting trained YOLO models
-to various deployment formats such as ONNX, TensorRT, TFLite, and TorchScript.
+Provides a clean interface for exporting trained YOLO models
+to deployment formats such as ONNX, TensorRT, TFLite, and TorchScript.
 """
 
 from pathlib import Path
+from typing import Optional
+from shutil import move
 
 from src.models.yolo.yolo_model import YOLOModel
 from src.logging.logger import get_logger
@@ -19,175 +21,325 @@ class ModelExporter:
     """
     Handles exporting trained YOLO models to deployment formats.
 
-    Uses settings from configs/export_config.py as defaults, while allowing
-    per-method overrides for flexibility.
+    Default export settings are loaded from configs/export_config.py.
+    Per-export overrides are supported.
 
     Supported formats:
-        - ONNX: Standard cross-platform format
-        - TensorRT: Optimized for NVIDIA GPUs
-        - TFLite: Optimized for mobile and edge devices
-        - TorchScript: For C++ deployment
+        - ONNX
+        - TensorRT
+        - TFLite
+        - TorchScript
     """
 
     def __init__(self, model: YOLOModel):
         """
-        Initialize exporter with a trained model.
+        Initialize the exporter.
 
         Args:
-            model: Trained YOLOModel instance.
+            model: A trained YOLOModel instance.
         """
         self.model = model
-        self.default_format = EXPORT_FORMAT
+
+        self.default_format = EXPORT_FORMAT.lower()
         self.default_simplify = SIMPLIFY
         self.default_dynamic = DYNAMIC
-        logger.info("ModelExporter initialized with default format: %s", self.default_format)
+
+        logger.info(
+            "ModelExporter initialized | format=%s | simplify=%s | dynamic=%s",
+            self.default_format,
+            self.default_simplify,
+            self.default_dynamic,
+        )
+
+    # ------------------------------------------------------------------
+    # ONNX
+    # ------------------------------------------------------------------
 
     def export_onnx(
         self,
         output_path: Path,
         imgsz: int = 640,
-        simplify: bool = None,
-        dynamic: bool = None,
+        simplify: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
     ) -> Path:
-        """
-        Export model to ONNX format.
 
-        If simplify or dynamic are not provided, values are taken from config.
+        output_path = self._prepare_output_path(output_path)
 
-        Args:
-            output_path: Path where the ONNX file will be saved.
-            imgsz: Input image size (default: 640).
-            simplify: Whether to simplify the ONNX graph (default from config).
-            dynamic: Whether to allow dynamic input sizes (default from config).
-
-        Returns:
-            The output path where the model was saved.
-
-        Raises:
-            Exception: If export fails.
-        """
-        if simplify is None:
-            simplify = self.default_simplify
-        if dynamic is None:
-            dynamic = self.default_dynamic
-
-        logger.info(
-            "Exporting to ONNX: %s (imgsz=%d, simplify=%s, dynamic=%s)",
-            output_path, imgsz, simplify, dynamic
+        simplify = (
+            self.default_simplify
+            if simplify is None
+            else simplify
         )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        self.model.export(
+        dynamic = (
+            self.default_dynamic
+            if dynamic is None
+            else dynamic
+        )
+
+        logger.info("Starting ONNX export...")
+        logger.info(f"Input checkpoint: {self.model.weight_path}")
+        logger.info(f"Image size: {imgsz}")
+        logger.info(f"Simplify: {simplify}")
+        logger.info(f"Dynamic: {dynamic}")
+
+        exported_path = self.model.export(
             format="onnx",
-            filename=str(output_path),   # ✅ crucial: specify output path
             imgsz=imgsz,
             simplify=simplify,
             dynamic=dynamic,
         )
 
-        logger.info("ONNX export complete.")
+        exported_path = Path(exported_path)
+
+        if not exported_path.exists():
+            raise FileNotFoundError(
+                f"Ultralytics export reported success, "
+                f"but file does not exist: {exported_path}"
+            )
+
+        if exported_path.resolve() != output_path.resolve():
+            move(
+                str(exported_path),
+                str(output_path),
+            )
+
+        self._verify_export(output_path)
+
+        logger.info(
+            f"ONNX export completed successfully: {output_path}"
+        )
+
         return output_path
 
-    def export_tensorrt(self, output_path: Path, imgsz: int = 640) -> Path:
-        """
-        Export model to TensorRT engine format.
+    def export_default(
+        self,
+        output_path: Path,
+        imgsz: int = 640,
+    ) -> Path:
 
-        TensorRT provides the fastest inference speed on NVIDIA GPUs.
+        if self.default_format == "onnx":
+            return self.export_onnx(
+                output_path=output_path,
+                imgsz=imgsz,
+            )
+
+        raise ValueError(
+            f"Unsupported export format: {self.default_format}"
+        )
+        
+        
+    # ------------------------------------------------------------------
+    # TensorRT
+    # ------------------------------------------------------------------
+
+    def export_tensorrt(
+        self,
+        output_path: Path,
+        imgsz: int = 640,
+    ) -> Path:
+        """
+        Export the model to TensorRT engine format.
 
         Args:
-            output_path: Path where the .engine file will be saved.
-            imgsz: Input image size (default: 640).
+            output_path: Destination path for the TensorRT engine.
+            imgsz: Input image size.
 
         Returns:
-            The output path where the model was saved.
+            Path to the exported engine.
         """
-        logger.info("Exporting to TensorRT: %s (imgsz=%d)", output_path, imgsz)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path)
 
-        self.model.export(
+        self._prepare_output_path(output_path)
+
+        logger.info(
+            "Starting TensorRT export | output=%s | imgsz=%d",
+            output_path,
+            imgsz,
+        )
+
+        exported_path = self.model.export(
             format="engine",
-            path=str(output_path),   # ✅ specify output path
             imgsz=imgsz,
         )
 
-        logger.info("TensorRT export complete.")
-        return output_path
+        exported_path = Path(exported_path)
 
-    def export_tflite(self, output_path: Path, imgsz: int = 640) -> Path:
+        self._verify_export(exported_path, "TensorRT")
+
+        logger.info(
+            "TensorRT export completed successfully: %s",
+            exported_path,
+        )
+
+        return exported_path
+
+    # ------------------------------------------------------------------
+    # TFLite
+    # ------------------------------------------------------------------
+
+    def export_tflite(
+        self,
+        output_path: Path,
+        imgsz: int = 640,
+    ) -> Path:
         """
-        Export model to TFLite format for mobile and edge deployment.
+        Export the model to TFLite format.
 
         Args:
-            output_path: Path where the .tflite file will be saved.
-            imgsz: Input image size (default: 640).
+            output_path: Destination path for the TFLite model.
+            imgsz: Input image size.
 
         Returns:
-            The output path where the model was saved.
+            Path to the exported model.
         """
-        logger.info("Exporting to TFLite: %s (imgsz=%d)", output_path, imgsz)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path)
 
-        self.model.export(
+        self._prepare_output_path(output_path)
+
+        logger.info(
+            "Starting TFLite export | output=%s | imgsz=%d",
+            output_path,
+            imgsz,
+        )
+
+        exported_path = self.model.export(
             format="tflite",
-            path=str(output_path),   # ✅ specify output path
             imgsz=imgsz,
         )
 
-        logger.info("TFLite export complete.")
-        return output_path
+        exported_path = Path(exported_path)
 
-    def export_torchscript(self, output_path: Path, imgsz: int = 640) -> Path:
+        self._verify_export(exported_path, "TFLite")
+
+        logger.info(
+            "TFLite export completed successfully: %s",
+            exported_path,
+        )
+
+        return exported_path
+
+    # ------------------------------------------------------------------
+    # TorchScript
+    # ------------------------------------------------------------------
+
+    def export_torchscript(
+        self,
+        output_path: Path,
+        imgsz: int = 640,
+    ) -> Path:
         """
-        Export model to TorchScript format for C++ deployment.
+        Export the model to TorchScript format.
 
         Args:
-            output_path: Path where the TorchScript file will be saved.
-            imgsz: Input image size (default: 640).
+            output_path: Destination path for the TorchScript model.
+            imgsz: Input image size.
 
         Returns:
-            The output path where the model was saved.
+            Path to the exported model.
         """
-        logger.info("Exporting to TorchScript: %s (imgsz=%d)", output_path, imgsz)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = Path(output_path)
 
-        self.model.export(
+        self._prepare_output_path(output_path)
+
+        logger.info(
+            "Starting TorchScript export | output=%s | imgsz=%d",
+            output_path,
+            imgsz,
+        )
+
+        exported_path = self.model.export(
             format="torchscript",
-            path=str(output_path),   # ✅ specify output path
             imgsz=imgsz,
         )
 
-        logger.info("TorchScript export complete.")
-        return output_path
+        exported_path = Path(exported_path)
 
-    def export_default(self, output_dir: Path, imgsz: int = 640) -> Path:
+        self._verify_export(exported_path, "TorchScript")
+
+        logger.info(
+            "TorchScript export completed successfully: %s",
+            exported_path,
+        )
+
+        return exported_path
+
+    # ------------------------------------------------------------------
+    # Default export
+    # ------------------------------------------------------------------
+
+    def export_default(
+        self,
+        output_path: Path,
+        imgsz: int = 640,
+    ) -> Path:
         """
-        Export model using the default format specified in config.
-
-        The output file name is automatically set to "model.{ext}" where
-        ext is determined by the format (e.g., .onnx, .engine, etc.).
+        Export using EXPORT_FORMAT from export_config.py.
 
         Args:
-            output_dir: Directory where the exported file will be saved.
-            imgsz: Input image size (default: 640).
+            output_path: Full destination path.
+            imgsz: Input image size.
 
         Returns:
-            The full path to the exported file.
+            Path to the exported model.
 
         Raises:
-            ValueError: If the default format is unsupported.
+            ValueError: If the configured format is unsupported.
         """
-        format_map = {
-            "onnx": ("model.onnx", self.export_onnx),
-            "engine": ("model.engine", self.export_tensorrt),
-            "tflite": ("model.tflite", self.export_tflite),
-            "torchscript": ("model.torchscript", self.export_torchscript),
+        output_path = Path(output_path)
+
+        export_methods = {
+            "onnx": self.export_onnx,
+            "engine": self.export_tensorrt,
+            "tensorrt": self.export_tensorrt,
+            "tflite": self.export_tflite,
+            "torchscript": self.export_torchscript,
         }
 
-        if self.default_format not in format_map:
-            raise ValueError(f"Unsupported export format: {self.default_format}")
+        if self.default_format not in export_methods:
+            raise ValueError(
+                f"Unsupported export format: {self.default_format}. "
+                f"Supported formats: {', '.join(export_methods.keys())}"
+            )
 
-        filename, export_method = format_map[self.default_format]
-        output_path = output_dir / filename
+        logger.info(
+            "Running default export | format=%s | output=%s",
+            self.default_format,
+            output_path,
+        )
 
-        logger.info("Exporting with default format (%s) to: %s", self.default_format, output_path)
-        return export_method(output_path, imgsz)
+        export_method = export_methods[self.default_format]
+
+        return export_method(
+            output_path=output_path,
+            imgsz=imgsz,
+        )
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _prepare_output_path(output_path: Path) -> Path:
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        return output_path
+
+
+
+    @staticmethod
+    def _verify_export(output_path: Path) -> None:
+        if not output_path.exists():
+            raise FileNotFoundError(
+                f"Exported model was not found: {output_path}"
+            )
+
+        if output_path.stat().st_size == 0:
+            raise RuntimeError(
+                f"Exported model is empty: {output_path}"
+            )
+
+        logger.info(
+            f"Export verified: {output_path} "
+            f"({output_path.stat().st_size / (1024 ** 2):.2f} MB)"
+        )
