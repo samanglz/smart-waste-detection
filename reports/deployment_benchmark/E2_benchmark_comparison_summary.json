@@ -1,0 +1,96 @@
+{
+  "comparison": {
+    "historical_file": "reports\\deployment_benchmark\\E2_benchmark.json",
+    "canonical_file": "reports\\deployment_benchmark\\E2_benchmark_results.json",
+    "historical_protocol": {
+      "timestamp_utc": null,
+      "protocol_version": null,
+      "image_size": null,
+      "num_images": null,
+      "warmup_runs": null,
+      "benchmark_runs": null,
+      "batch_size": null,
+      "seed": null,
+      "split": null,
+      "timing_mode": null,
+      "aggregation": null
+    },
+    "canonical_protocol": {
+      "timestamp_utc": "2026-09-07T11:01:05.199509+00:00",
+      "protocol_version": "1.0",
+      "image_size": 640,
+      "num_images": 30,
+      "warmup_runs": 10,
+      "benchmark_runs": 50,
+      "batch_size": 1,
+      "seed": 42,
+      "split": "val",
+      "timing_mode": "inference_only",
+      "aggregation": "per_image_mean"
+    }
+  },
+  "historical_environment": {
+    "pytorch_version": "2.5.1+cu121",
+    "onnxruntime_version": "1.20.2",
+    "cuda_available": true,
+    "cuda_version": "12.1",
+    "gpu_name": "NVIDIA GeForce RTX 3050 Laptop GPU"
+  },
+  "canonical_environment": {
+    "python_version": "3.11.0",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "os": "Windows",
+    "pytorch_version": "2.5.1+cu121",
+    "onnxruntime_version": "1.20.2",
+    "cuda_available": true,
+    "cuda_version": "12.1",
+    "gpu_name": "NVIDIA GeForce RTX 3050 Laptop GPU"
+  },
+  "results": [
+    {
+      "runtime": "pytorch_cpu",
+      "historical_mean_ms": 800.7333845250929,
+      "canonical_mean_ms": 252.9354297333351,
+      "latency_change_ms": -547.7979547917578,
+      "latency_change_pct": -68.41202894477185,
+      "historical_fps": 1.2488551362112748,
+      "canonical_fps": 3.9535781960411023,
+      "fps_change": 2.7047230598298277,
+      "fps_change_pct": 216.57620499006038
+    },
+    {
+      "runtime": "pytorch_gpu",
+      "historical_mean_ms": 35.965399941429496,
+      "canonical_mean_ms": 24.11394779998227,
+      "latency_change_ms": -11.851452141447226,
+      "latency_change_pct": -32.95237133675031,
+      "historical_fps": 27.804501037900973,
+      "canonical_fps": 41.469775430165576,
+      "fps_change": 13.665274392264603,
+      "fps_change_pct": 49.14770588271713
+    },
+    {
+      "runtime": "onnx_cpu",
+      "historical_mean_ms": 737.554297193264,
+      "canonical_mean_ms": 154.1447484000067,
+      "latency_change_ms": -583.4095487932573,
+      "latency_change_pct": -79.1005558524167,
+      "historical_fps": 1.355832382518092,
+      "canonical_fps": 6.487408817879367,
+      "fps_change": 5.131576435361275,
+      "fps_change_pct": 378.48162512764
+    },
+    {
+      "runtime": "onnx_gpu",
+      "historical_mean_ms": 44.059045797524355,
+      "canonical_mean_ms": 28.32124520000434,
+      "latency_change_ms": -15.737800597520014,
+      "latency_change_pct": -35.719794454568756,
+      "historical_fps": 22.69681473801208,
+      "canonical_fps": 35.30918195644331,
+      "fps_change": 12.612367218431231,
+      "fps_change_pct": 55.568886489205646
+    }
+  ],
+  "interpretation": "The historical and canonical E2 benchmarks were executed under different software/hardware environments. Therefore, latency/FPS changes describe benchmark-result differences but must not be interpreted as model or runtime regressions without controlling the execution environment."
+}
