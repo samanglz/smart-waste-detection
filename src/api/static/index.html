@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Waste Live Camera</title>
+    <style>
+        body{
+            background:#111827;
+            color:white;
+            font-family:Arial;
+            text-align:center;
+        }
+
+        .container{
+            position:relative;
+            width:640px;
+            margin:auto;
+        }
+
+        video,canvas{
+            width:640px;
+            border-radius:12px;
+        }
+
+        canvas{
+            position:absolute;
+            left:0;
+            top:0;
+        }
+
+        button{
+            margin:15px;
+            padding:12px 20px;
+            font-size:16px;
+        }
+
+        #fps{
+            margin-top:10px;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Smart Waste Detection</h2>
+
+<button id="startBtn">Start Camera</button>
+
+<div class="container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="overlay"></canvas>
+</div>
+
+<p id="fps">FPS --</p>
+
+<script src="app.js"></script>
+
+</body>
+</html>
