@@ -98,7 +98,7 @@ def main():
     # ---------------------------------------------------------
 
     model_path = Path(
-        "runs/detect/runs/E6_hard_mining_targeted_aug/weights/best.pt"
+        "runs/detect/runs/E7_plus/weights/best.pt"
     )
 
     model = YOLOModel(model_path)
@@ -117,7 +117,7 @@ def main():
     # ---------------------------------------------------------
 
     evaluation_dir = Path(
-        "outputs/yolo11m/E6_hard_mining_targeted_aug"
+        "outputs/yolo11m/E7_plus"
     )
 
     evaluation_dir.mkdir(
