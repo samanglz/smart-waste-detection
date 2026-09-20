@@ -7,6 +7,8 @@ import yaml
 from .base_dataset import BaseDataset
 from src.logging.logger import get_logger
 from typing import List, Dict, Any
+import json
+from torch.utils.data import WeightedRandomSampler
 
 
 
@@ -242,3 +244,55 @@ class YOLODataset(BaseDataset):
         }
         
     
+    
+
+    def build_weighted_sampler(
+        self,
+        image_paths: list[Path],
+        weight_file: Path,
+    ):
+        """
+        Build WeightedRandomSampler from sampling_weights.json.
+
+        Supports absolute paths and filenames.
+        """
+
+        with open(
+            weight_file,
+            "r",
+            encoding="utf-8",
+        ) as f:
+            data = json.load(f)
+
+        raw_weight_table = data["weights"]
+
+        # Normalize path-based keys
+        weight_table = {
+            str(Path(path).resolve()).lower(): float(weight)
+            for path, weight in raw_weight_table.items()
+        }
+
+        weights = []
+
+        for image_path in image_paths:
+
+            image_path = Path(image_path)
+
+            normalized_path = str(
+                image_path.resolve()
+            ).lower()
+
+            weight = weight_table.get(
+                normalized_path,
+                1.0,
+            )
+
+            weights.append(
+                weight
+            )
+
+        return WeightedRandomSampler(
+            weights=weights,
+            num_samples=len(weights),
+            replacement=True,
+        )
