@@ -495,17 +495,7 @@ Python **3.11** is used for the current development environment.
 
 ---
 
-# 🚀 Quick Start
 
-Run the project entry point:
-
-```bash
-python -m main
-```
-
-Training, evaluation, export, and inference workflows can be executed through their respective project modules and configurations.
-
----
 
 # 📚 Documentation
 
