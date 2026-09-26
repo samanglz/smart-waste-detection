@@ -1,0 +1,7 @@
+E7 Plus Deployment FPS
+======================
+
+Pytorch Cpu: 4.241 FPS
+Pytorch Gpu: 41.428 FPS
+Onnx Cpu: 6.532 FPS
+Onnx Gpu: 35.351 FPS
